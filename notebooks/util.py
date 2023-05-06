@@ -1,6 +1,9 @@
 import torch
+import torchvision
 import numpy as np
 import pandas as pd
+import altair as alt
+import scipy.stats as stats
 from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 
 def encode(df, tokenizer):
@@ -38,6 +41,23 @@ def evaluate(preds):
         'f1': f1_score(labels, predictions, average='weighted'),
     }
 
+# SOURCE: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ttest_ind.html#scipy.stats.ttest_ind
+# SOURCE: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2996580/
+
+def compare(metric, df1, df2):
+    group_1 = df1[metric]
+    group_2 = df2[metric]
+    
+    t_stat, p_value = stats.ttest_ind(group_1, group_2)
+    
+    return t_stat, p_value
+
+def significance(metric, p_value, alpha=0.05):
+    if p_value < alpha:
+        return f"{metric}: P-value = {p_value} (Significant!)"
+    else:
+        return f"{metric}: P-value = {p_value} (Insignificant!)"
+
 
 def create_df(paths):
 
@@ -66,6 +86,91 @@ def create_df(paths):
     df2 = df2[['model', 'epoch', 'accuracy', 'precision', 'recall', 'macro f1', 'f1']]
 
     return df2
+
+# SOURCE: https://altair-viz.github.io/gallery/line_chart_with_custom_legend.html
+
+def static_graph(df, metric):
+    base = alt.Chart(df).encode(
+        color=alt.Color("model", legend=alt.Legend(title="Model"))
+    ).properties(
+        width=500
+    )
+
+    line = base.mark_line().encode(
+        x="epoch:Q",
+        y=f"{metric}:Q",
+        tooltip=["model:N", "epoch:Q", f"{metric}:Q"]
+    )
+
+    last_epoch = base.mark_circle().encode(
+        x=alt.X("last_epoch['epoch']:Q"),
+        y=alt.Y(f"last_epoch['{metric}']:Q")
+    ).transform_filter(
+        alt.datum.metric == metric
+    ).transform_aggregate(
+        last_epoch="argmax(epoch)",
+        groupby=["model"]
+    )
+
+    model_name = last_epoch.mark_text(align="left", dx=4).encode(text="model")
+
+    chart = (line + last_epoch + model_name).encode(
+        x=alt.X(title="Epoch"),
+        y=alt.Y(title=metric.capitalize())
+    ).properties(
+        title=f"{metric.capitalize()} per Epoch"
+    ).interactive()
+
+    return chart
+
+# SOURCE: https://altair-viz.github.io/gallery/line_chart_with_custom_legend.html
+# SOURCE: https://altair-viz.github.io/gallery/multiple_interactions.html
+
+def dynamic_graph(df):
+    melt = pd.melt(df, id_vars=["model", "epoch"], var_name="metric", value_name="value")
+    selection = alt.selection_single(
+        name="Select",
+        fields=["metric"],
+        init={"metric": "accuracy"},
+        bind=alt.binding_select(options=["accuracy", "precision", "recall", "macro f1", "f1"])
+    )
+
+    base = alt.Chart(melt).encode(
+        color=alt.Color("model", legend=alt.Legend(title="Model"))
+    ).properties(
+        width=500
+    )
+
+    line = base.mark_line().encode(
+        x="epoch:Q",
+        y="value:Q",
+        tooltip=["model:N", "epoch:Q", "value:Q", "metric:N"]
+    ).add_selection(
+        selection
+    ).transform_filter(
+        selection
+    )
+
+    last_epoch = base.mark_circle().encode(
+        x=alt.X("last_epoch['epoch']:Q"),
+        y=alt.Y("last_epoch['value']:Q")
+    ).transform_aggregate(
+        last_epoch="argmax(epoch)",
+        groupby=["model"]
+    ).transform_filter(
+        selection
+    )
+
+    chart = (line + last_epoch).encode(
+        x=alt.X(title="Epoch"),
+        y=alt.Y("value:Q", title="Value"),
+    ).properties(
+        title="Evaluation Metrics per Epoch"
+    ).add_selection(
+        selection
+    ).interactive()
+
+    return chart
 
 def EWN(df, n=1):
 
