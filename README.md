@@ -5,7 +5,7 @@ Final Project Abstract
 
 ## Data
 
-Contains a README with information regarding The Penn Discourse Treebank (PDTB). Follow data pre-processing steps in main.ipynb to convert piped files to csv format, and place `pdtb2.csv` in `/data` in order to reproduce our results.
+Contains a README file with information regarding The Penn Discourse Treebank (PDTB). Follow data pre-processing steps in `main.ipynb` to convert piped files to csv format, and place `pdtb2.csv` in `/data` to reproduce our results.
 
 ## Notebooks
 
